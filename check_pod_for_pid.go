@@ -47,9 +47,14 @@ func main() {
 	pid := os.Args[1]
 	cgroupPath := fmt.Sprintf("/proc/%s/cgroup", pid)
 
-	podID, containerID := getPodAndContainerID(cgroupPath)
+	podID, containerID, isHostProcess := getPodAndContainerID(cgroupPath)
+	if isHostProcess {
+		fmt.Printf("进程 %s 是一个主机进程。\n", pid)
+		return
+	}
+
 	if podID == "" && containerID == "" {
-		fmt.Printf("Unable to get Pod ID or Container ID from cgroup path: %s\n", cgroupPath)
+		fmt.Printf("无法从 cgroup 路径获取 Pod ID 或 Container ID：%s\n", cgroupPath)
 		return
 	}
 
@@ -97,12 +102,13 @@ func main() {
 // 返回值：
 //   - string: Pod ID（如果找到）
 //   - string: Container ID（如果找到）
+//   - bool: 是否为主机进程（如果找到）
 //   - 如果未找到，两个返回值都为空字符串
-func getPodAndContainerID(cgroupPath string) (string, string) {
+func getPodAndContainerID(cgroupPath string) (string, string, bool) {
 	file, err := os.Open(cgroupPath)
 	if err != nil {
 		fmt.Printf("Error opening cgroup file: %v\n", err)
-		return "", ""
+		return "", "", false
 	}
 	defer file.Close()
 
@@ -112,6 +118,10 @@ func getPodAndContainerID(cgroupPath string) (string, string) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
+		// 检查是否为主机应用
+		if line == "0::/" || strings.HasSuffix(line, ":/init.scope") {
+			return "", "", true
+		}
 		if strings.Contains(line, "kubepods") {
 			parts := strings.Split(line, "/")
 			if len(parts) >= 4 {
@@ -122,7 +132,7 @@ func getPodAndContainerID(cgroupPath string) (string, string) {
 					if len(parts) >= 5 {
 						containerMatch := containerRegex.FindStringSubmatch(parts[4])
 						if len(containerMatch) == 2 {
-							return podID, containerMatch[1]
+							return podID, containerMatch[1], false
 						}
 					}
 				}
@@ -130,7 +140,7 @@ func getPodAndContainerID(cgroupPath string) (string, string) {
 		}
 	}
 
-	return "", ""
+	return "", "", false
 }
 
 // findPodInfo 在 Kubernetes 集群中查找与给定 Pod ID 或 Container ID 匹配的 Pod。
