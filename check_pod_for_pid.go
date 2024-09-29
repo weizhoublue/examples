@@ -107,7 +107,7 @@ func main() {
 func getPodAndContainerID(cgroupPath string) (string, string, bool) {
 	file, err := os.Open(cgroupPath)
 	if err != nil {
-		fmt.Printf("Error opening cgroup file: %v\n", err)
+		fmt.Printf("打开 cgroup 文件时出错：%v\n", err)
 		return "", "", false
 	}
 	defer file.Close()
@@ -118,10 +118,6 @@ func getPodAndContainerID(cgroupPath string) (string, string, bool) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		// 检查是否为主机应用
-		if line == "0::/" || strings.HasSuffix(line, ":/init.scope") {
-			return "", "", true
-		}
 		if strings.Contains(line, "kubepods") {
 			parts := strings.Split(line, "/")
 			if len(parts) >= 4 {
@@ -137,10 +133,32 @@ func getPodAndContainerID(cgroupPath string) (string, string, bool) {
 					}
 				}
 			}
+		} else {
+			// 检查是否为主机应用
+			if isHostProcess(line) {
+				return "", "", true
+			}
 		}
 	}
 
 	return "", "", false
+}
+
+var hostPatterns := []*regexp.Regexp{
+	regexp.MustCompile(`^0::/$`),
+	regexp.MustCompile(`^0::/init\.scope$`),
+	regexp.MustCompile(`^0::/user\.slice/.*$`),
+	regexp.MustCompile(`^0::/system\.slice/.*$`),
+}
+
+// isHostProcess 使用正则表达式检查给定的 cgroup 行是否表示主机进程
+func isHostProcess(line string) bool {
+	for _, pattern := range hostPatterns {
+		if pattern.MatchString(line) {
+			return true
+		}
+	}
+	return false
 }
 
 // findPodInfo 在 Kubernetes 集群中查找与给定 Pod ID 或 Container ID 匹配的 Pod。
