@@ -53,8 +53,9 @@ func main() {
 		return
 	}
 
-	if podID == "" && containerID == "" {
-		fmt.Printf("无法从 cgroup 路径获取 Pod ID 或 Container ID：%s\n", cgroupPath)
+	if podID == "" && containerID != "" {
+		fmt.Printf("进程 %s 属于一个容器。\n", pid)
+		fmt.Printf("Container ID: %s\n", containerID)
 		return
 	}
 
@@ -93,7 +94,7 @@ func main() {
 // 2. 使用正则表达式查找包含 "kubepods" 的行。
 // 3. 解析该行以提取 Pod ID 和 Container ID。
 // 4. Pod ID 通常在第四个路径段中，Container ID 在第五个路径段中。
-// 5. 使用正则表达式匹配以适应不同的 cgroup 路径格式。
+// 5. 使用正��表达式匹配以适应不同的 cgroup 路径格式。
 // 6. 将 Pod ID 中的下划线替换为连字符，以匹配 Kubernetes 中的 UID 格式。
 //
 // 参数：
@@ -114,11 +115,15 @@ func getPodAndContainerID(cgroupPath string) (string, string, bool) {
 
 	podRegex := regexp.MustCompile(`kubepods-[^-]+-pod([^.]+)\.slice`)
 	containerRegex := regexp.MustCompile(`[^-]+-([^.]+)\.scope`)
+	dockerContainerRegex := regexp.MustCompile(`docker-([0-9a-f]{64})\.scope$`)
+	containerdContainerRegex := regexp.MustCompile(`containerd-([0-9a-f]{64})\.scope$`)
+	crioContainerRegex := regexp.MustCompile(`crio-([0-9a-f]{64})\.scope$`)
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.Contains(line, "kubepods") {
+			// 现有的 Kubernetes Pod 逻辑
 			parts := strings.Split(line, "/")
 			if len(parts) >= 4 {
 				podMatch := podRegex.FindStringSubmatch(parts[3])
@@ -133,18 +138,21 @@ func getPodAndContainerID(cgroupPath string) (string, string, bool) {
 					}
 				}
 			}
-		} else {
-			// 检查是否为主机应用
-			if isHostProcess(line) {
-				return "", "", true
-			}
+		} else if dockerMatch := dockerContainerRegex.FindStringSubmatch(line); dockerMatch != nil {
+			return "", dockerMatch[1], false
+		} else if containerdMatch := containerdContainerRegex.FindStringSubmatch(line); containerdMatch != nil {
+			return "", containerdMatch[1], false
+		} else if crioMatch := crioContainerRegex.FindStringSubmatch(line); crioMatch != nil {
+			return "", crioMatch[1], false
+		} else if isHostProcess(line) {
+			return "", "", true
 		}
 	}
 
 	return "", "", false
 }
 
-var hostPatterns := []*regexp.Regexp{
+var hostPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`^0::/$`),
 	regexp.MustCompile(`^0::/init\.scope$`),
 	regexp.MustCompile(`^0::/user\.slice/.*$`),
