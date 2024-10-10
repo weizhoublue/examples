@@ -1,5 +1,3 @@
-package main
-
 /*
 本文件实现了一个名为 StringStorage 的数据结构，用于存储和管理键值对。
 
@@ -35,6 +33,9 @@ package main
 - 达到容量上限时会自动删除最旧的数据。
 - 支持通过值查找键，但要注意值的唯一性。
 */
+
+package main
+
 
 import (
 	"fmt"
@@ -131,7 +132,7 @@ func (pr *PodRegistry) deleteInternal(key PodName) {
 func (pr *PodRegistry) removeFromKeyOrder(key PodName) {
 	for i, k := range pr.keyOrder {
 		if k == key {
-			// 使用 copy 来移除元素，避免内存泄漏
+			// 使用 copy 来移��元素，避免内存泄漏
 			copy(pr.keyOrder[i:], pr.keyOrder[i+1:])
 			pr.keyOrder = pr.keyOrder[:len(pr.keyOrder)-1]
 			break
