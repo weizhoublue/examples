@@ -33,6 +33,8 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"sort"
 	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -108,6 +110,10 @@ func (ps *PodStore) GetIPWithLabelSelector(selector *metav1.LabelSelector) []IpI
 			}
 		}
 	}
+	// 对 IP 地址进行排序
+	sort.Slice(ipInfos, func(i, j int) bool {
+		return net.ParseIP(ipInfos[i].IPv4).String() < net.ParseIP(ipInfos[j].IPv4).String()
+	})
 	return ipInfos
 }
 
