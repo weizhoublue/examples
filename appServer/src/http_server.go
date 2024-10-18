@@ -31,22 +31,16 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"main/common"
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
-// ResponseData represents the structure of the response data
-type ResponseData struct {
-	ServerHostName     string            `json:"ServerHostName"`
-	ClientIP           string            `json:"ClientIP"`
-	ServerIP           string            `json:"ServerIP"`
-	IPVersion          string            `json:"IPVersion"`
-	RequestData        string            `json:"RequestData"`
-	RequestHttpHeaders map[string]string `json:"RequestHttpHeaders"`
-	RequestTimestamp   string            `json:"RequestTimestamp"`
-}
+var requestCount int
+var mutex sync.Mutex
 
 func main() {
 	// Define command-line flags
@@ -60,7 +54,9 @@ func main() {
 		return
 	}
 
-	http.HandleFunc("/", handleRequest)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		handleRequest(w, r, *port)
+	})
 
 	// Start the HTTP server
 	address := fmt.Sprintf(":%s", *port)
@@ -71,21 +67,31 @@ func main() {
 }
 
 // handleRequest processes incoming HTTP requests
-func handleRequest(w http.ResponseWriter, r *http.Request) {
-	serverHostName, clientIP, serverIP, ipVersion, requestData, requestHttpHeaders, err := processRequest(r)
+func handleRequest(w http.ResponseWriter, r *http.Request, serverPort string) {
+	mutex.Lock()
+	requestCount++
+	currentRequestCount := requestCount
+	mutex.Unlock()
+
+	serverHostName, clientIP, clientPort, serverIP, ipVersion, echoData, requestHttpHeaders, err := processRequest(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	response := ResponseData{
+	response := common.HttpServerResponse{
 		ServerHostName:     serverHostName,
 		ClientIP:           clientIP,
+		ClientPort:         clientPort,
 		ServerIP:           serverIP,
+		ServerPort:         serverPort, // Use the specified server port
 		IPVersion:          ipVersion,
-		RequestData:        requestData,
+		ClientEchoData:     echoData,
 		RequestHttpHeaders: requestHttpHeaders,
 		RequestTimestamp:   time.Now().Format(time.RFC3339),
+		URL:                r.URL.String(),
+		RequestCounter:     currentRequestCount,
+		ServerType:         "http", // Set server type to http
 	}
 
 	if err := sendResponse(w, response); err != nil {
@@ -94,22 +100,22 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // processRequest extracts and logs request data
-func processRequest(r *http.Request) (string, string, string, string, string, map[string]string, error) {
+func processRequest(r *http.Request) (string, string, string, string, string, string, map[string]string, error) {
 	serverHostName, err := os.Hostname()
 	if err != nil {
-		return "", "", "", "", "", nil, fmt.Errorf("unable to get hostname: %v", err)
+		return "", "", "", "", "", "", nil, fmt.Errorf("unable to get hostname: %v", err)
 	}
 
-	clientIP, _, err := net.SplitHostPort(r.RemoteAddr)
+	clientIP, clientPort, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return "", "", "", "", "", nil, fmt.Errorf("unable to parse client IP address: %v", err)
+		return "", "", "", "", "", "", nil, fmt.Errorf("unable to parse client IP address: %v", err)
 	}
 
-	serverIP, ipVersion := getLocalIPAndVersion()
+	serverIP, ipVersion := common.GetServerIPAndVersion(r)
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		return "", "", "", "", "", nil, fmt.Errorf("unable to read request body: %v", err)
+		return "", "", "", "", "", "", nil, fmt.Errorf("unable to read request body: %v", err)
 	}
 
 	requestHttpHeaders := make(map[string]string)
@@ -117,34 +123,14 @@ func processRequest(r *http.Request) (string, string, string, string, string, ma
 		requestHttpHeaders[name] = values[0] // Assuming single value for simplicity
 	}
 
-	requestData := string(body)
-	log.Printf("Received request from %s with data: %s", clientIP, requestData)
+	echoData := string(body)
+	log.Printf("Received request from %s:%s with data: %s", clientIP, clientPort, echoData)
 
-	return serverHostName, clientIP, serverIP, ipVersion, requestData, requestHttpHeaders, nil
-}
-
-// getLocalIPAndVersion determines the server's local IP and whether it is IPv4 or IPv6
-func getLocalIPAndVersion() (string, string) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", "Unknown"
-	}
-
-	for _, addr := range addrs {
-		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
-			if ipNet.IP.To4() != nil {
-				return ipNet.IP.String(), "IPv4"
-			}
-			if ipNet.IP.To16() != nil {
-				return ipNet.IP.String(), "IPv6"
-			}
-		}
-	}
-	return "", "Unknown"
+	return serverHostName, clientIP, clientPort, serverIP, ipVersion, echoData, requestHttpHeaders, nil
 }
 
 // sendResponse marshals the response data to JSON and writes it to the response writer
-func sendResponse(w http.ResponseWriter, response ResponseData) error {
+func sendResponse(w http.ResponseWriter, response common.HttpServerResponse) error {
 	responseJSON, err := json.Marshal(response)
 	if err != nil {
 		return fmt.Errorf("unable to marshal response data: %v", err)

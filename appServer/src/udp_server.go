@@ -31,20 +31,15 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"main/common"
 	"net"
 	"os"
+	"sync"
 	"time"
 )
 
-// ResponseData represents the structure of the response data
-type ResponseData struct {
-	ServerHostName   string `json:"ServerHostName"`
-	ClientIP         string `json:"ClientIP"`
-	ServerIP         string `json:"ServerIP"`
-	IPVersion        string `json:"IPVersion"`
-	RequestData      string `json:"RequestData"`
-	RequestTimestamp string `json:"RequestTimestamp"`
-}
+var requestCount int
+var mutex sync.Mutex
 
 func main() {
 	// Define command-line flags
@@ -81,12 +76,17 @@ func main() {
 			continue
 		}
 
-		go handleUDPRequest(conn, addr, buffer[:n])
+		go handleUDPRequest(conn, addr, buffer[:n], *port)
 	}
 }
 
 // handleUDPRequest processes incoming UDP requests
-func handleUDPRequest(conn *net.UDPConn, addr *net.UDPAddr, data []byte) {
+func handleUDPRequest(conn *net.UDPConn, addr *net.UDPAddr, data []byte, port string) {
+	mutex.Lock()
+	requestCount++
+	currentRequestCount := requestCount
+	mutex.Unlock()
+
 	serverHostName, err := os.Hostname()
 	if err != nil {
 		log.Printf("Unable to get hostname: %v", err)
@@ -94,18 +94,23 @@ func handleUDPRequest(conn *net.UDPConn, addr *net.UDPAddr, data []byte) {
 	}
 
 	clientIP := addr.IP.String()
+	clientPort := fmt.Sprintf("%d", addr.Port)
 	serverIP, ipVersion := getServerIPAndVersion(addr)
 
-	requestData := string(data)
-	log.Printf("Received request from %s with data: %s", clientIP, requestData)
+	echoData := string(data)
+	log.Printf("Received request from %s:%s with data: %s", clientIP, clientPort, echoData)
 
-	response := ResponseData{
+	response := common.UdpServerResponse{
 		ServerHostName:   serverHostName,
 		ClientIP:         clientIP,
+		ClientPort:       clientPort,
 		ServerIP:         serverIP,
+		ServerPort:       port,
 		IPVersion:        ipVersion,
-		RequestData:      requestData,
+		ClientEchoData:   echoData,
 		RequestTimestamp: time.Now().Format(time.RFC3339),
+		RequestCounter:   currentRequestCount,
+		ServerType:       "udp", // Set server type to udp
 	}
 
 	if err := sendUDPResponse(conn, addr, response); err != nil {
@@ -123,7 +128,7 @@ func getServerIPAndVersion(addr *net.UDPAddr) (string, string) {
 }
 
 // sendUDPResponse marshals the response data to JSON and sends it back to the client
-func sendUDPResponse(conn *net.UDPConn, addr *net.UDPAddr, response ResponseData) error {
+func sendUDPResponse(conn *net.UDPConn, addr *net.UDPAddr, response common.UdpServerResponse) error {
 	responseJSON, err := json.Marshal(response)
 	if err != nil {
 		return fmt.Errorf("unable to marshal response data: %v", err)
