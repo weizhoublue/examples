@@ -100,6 +100,8 @@ func handleUDPRequest(conn *net.UDPConn, addr *net.UDPAddr, data []byte, port st
 	echoData := string(data)
 	log.Printf("Received request from %s:%s with data: %s", clientIP, clientPort, echoData)
 
+	envList := common.GetEnvironmentVariables("ENV_")
+
 	response := common.UdpServerResponse{
 		ServerHostName:   serverHostName,
 		ClientIP:         clientIP,
@@ -110,7 +112,8 @@ func handleUDPRequest(conn *net.UDPConn, addr *net.UDPAddr, data []byte, port st
 		ClientEchoData:   echoData,
 		RequestTimestamp: time.Now().Format(time.RFC3339),
 		RequestCounter:   currentRequestCount,
-		ServerType:       "udp", // Set server type to udp
+		ServerType:       "udp",   // Set server type to udp
+		EnvList:          envList, // Add environment variables to the response
 	}
 
 	if err := sendUDPResponse(conn, addr, response); err != nil {
@@ -139,6 +142,7 @@ func sendUDPResponse(conn *net.UDPConn, addr *net.UDPAddr, response common.UdpSe
 		return fmt.Errorf("unable to send response: %v", err)
 	}
 
+	log.Printf("Response JSON length: %d", len(responseJSON))
 	log.Printf("Sent response to %s: %s", addr.String(), responseJSON)
 	return nil
 }

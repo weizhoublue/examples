@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strings"
 )
 
 // GetServerIPAndVersion determines the server's IP and the IP version of the request
@@ -50,4 +52,16 @@ func GetServerIPAndPort() (string, string, error) {
 	ip := localAddr.IP.String()
 	port := fmt.Sprintf("%d", localAddr.Port)
 	return ip, port, nil
+}
+
+// getEnvironmentVariables retrieves all environment variables
+func GetEnvironmentVariables(envPrefix string) map[string]string {
+	envVars := make(map[string]string)
+	for _, env := range os.Environ() {
+		pair := strings.SplitN(env, "=", 2)
+		if len(pair) == 2 && strings.HasPrefix(pair[0], envPrefix) {
+			envVars[pair[0]] = pair[1]
+		}
+	}
+	return envVars
 }

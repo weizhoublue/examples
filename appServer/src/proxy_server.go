@@ -59,6 +59,12 @@ func main() {
 		return
 	}
 
+	// 添加 /healthy 路由
+	http.HandleFunc("/healthy", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		mutex.Lock()
 		requestCount++
@@ -84,7 +90,7 @@ func main() {
 				FrontPort:       *port,
 				RequestCounter:  currentRequestCount,
 				ForwardType:     clientReq.ForwardType,
-			})
+			}, http.StatusBadRequest)
 			return
 		}
 
@@ -99,7 +105,7 @@ func main() {
 				FrontPort:       *port,
 				RequestCounter:  currentRequestCount,
 				ForwardType:     clientReq.ForwardType,
-			})
+			}, http.StatusBadRequest)
 			return
 		}
 
@@ -114,7 +120,7 @@ func main() {
 				FrontPort:       *port,
 				RequestCounter:  currentRequestCount,
 				ForwardType:     clientReq.ForwardType,
-			})
+			}, http.StatusBadRequest)
 			return
 		}
 
@@ -131,7 +137,7 @@ func main() {
 					FrontPort:       *port,
 					RequestCounter:  currentRequestCount,
 					ForwardType:     clientReq.ForwardType,
-				})
+				}, http.StatusBadRequest)
 				return
 			}
 		} else if clientReq.ForwardType == "udp" {
@@ -146,7 +152,7 @@ func main() {
 					FrontPort:       *port,
 					RequestCounter:  currentRequestCount,
 					ForwardType:     clientReq.ForwardType,
-				})
+				}, http.StatusBadRequest)
 				return
 			}
 		} else {
@@ -160,7 +166,7 @@ func main() {
 				FrontPort:       *port,
 				RequestCounter:  currentRequestCount,
 				ForwardType:     clientReq.ForwardType,
-			})
+			}, http.StatusBadRequest)
 			return
 		}
 
@@ -216,7 +222,7 @@ func handleHTTPForwarding(w http.ResponseWriter, r *http.Request, clientReq comm
 			FrontPort:       port,
 			RequestCounter:  requestCounter,
 			ForwardType:     clientReq.ForwardType,
-		})
+		}, http.StatusBadRequest)
 		return
 	}
 
@@ -235,7 +241,7 @@ func handleHTTPForwarding(w http.ResponseWriter, r *http.Request, clientReq comm
 			FrontPort:       port,
 			RequestCounter:  requestCounter,
 			ForwardType:     clientReq.ForwardType,
-		})
+		}, http.StatusBadRequest)
 		return
 	}
 
@@ -258,7 +264,7 @@ func handleHTTPForwarding(w http.ResponseWriter, r *http.Request, clientReq comm
 			FrontPort:       port,
 			RequestCounter:  requestCounter,
 			ForwardType:     clientReq.ForwardType,
-		})
+		}, http.StatusBadRequest)
 		return
 	}
 	backendIP := backendIPs[0].String()
@@ -278,7 +284,7 @@ func handleHTTPForwarding(w http.ResponseWriter, r *http.Request, clientReq comm
 			FrontPort:       port,
 			RequestCounter:  requestCounter,
 			ForwardType:     clientReq.ForwardType,
-		})
+		}, http.StatusGatewayTimeout) // 传入 504 状态码
 		return
 	}
 	defer resp.Body.Close()
@@ -297,7 +303,7 @@ func handleHTTPForwarding(w http.ResponseWriter, r *http.Request, clientReq comm
 			FrontPort:       port,
 			RequestCounter:  requestCounter,
 			ForwardType:     clientReq.ForwardType,
-		})
+		}, http.StatusBadRequest)
 		return
 	}
 
@@ -313,7 +319,7 @@ func handleHTTPForwarding(w http.ResponseWriter, r *http.Request, clientReq comm
 		FrontPort:       port,
 		RequestCounter:  requestCounter,
 		ForwardType:     clientReq.ForwardType,
-	})
+	}, http.StatusOK)
 }
 
 // handleUDPForwarding handles UDP forwarding to the backend server
@@ -330,13 +336,14 @@ func handleUDPForwarding(w http.ResponseWriter, r *http.Request, clientReq commo
 			FrontPort:       port,
 			RequestCounter:  requestCounter,
 			ForwardType:     clientReq.ForwardType,
-		})
+		}, http.StatusBadRequest)
 		return
 	}
 
 	// Forward the EchoData to the backend server
 	backendConn, err := net.DialUDP("udp", nil, backendAddr)
 	if err != nil {
+		w.WriteHeader(http.StatusBadGateway) // 设置 HTTP 状态码为 502 表示错误网关
 		sendProxyResponse(w, r, common.ProxyResponse{
 			Success:         false,
 			ErrorMessage:    "Failed to connect to backend server. Ensure the backend server is reachable via UDP.",
@@ -349,7 +356,7 @@ func handleUDPForwarding(w http.ResponseWriter, r *http.Request, clientReq commo
 			FrontPort:       port,
 			RequestCounter:  requestCounter,
 			ForwardType:     clientReq.ForwardType,
-		})
+		}, http.StatusBadGateway)
 		return
 	}
 	defer backendConn.Close()
@@ -368,7 +375,7 @@ func handleUDPForwarding(w http.ResponseWriter, r *http.Request, clientReq commo
 			FrontPort:       port,
 			RequestCounter:  requestCounter,
 			ForwardType:     clientReq.ForwardType,
-		})
+		}, http.StatusBadRequest)
 		return
 	}
 
@@ -391,7 +398,7 @@ func handleUDPForwarding(w http.ResponseWriter, r *http.Request, clientReq commo
 			FrontPort:       port,
 			RequestCounter:  requestCounter,
 			ForwardType:     clientReq.ForwardType,
-		})
+		}, http.StatusGatewayTimeout) // 传入 504 状态码
 		return
 	}
 
@@ -407,7 +414,7 @@ func handleUDPForwarding(w http.ResponseWriter, r *http.Request, clientReq commo
 		FrontPort:       port,
 		RequestCounter:  requestCounter,
 		ForwardType:     clientReq.ForwardType,
-	})
+	}, http.StatusOK)
 }
 
 // constructFullURL constructs the full URL from the request
@@ -420,7 +427,7 @@ func constructFullURL(r *http.Request) string {
 }
 
 // sendProxyResponse marshals the response data to JSON and writes it to the response writer
-func sendProxyResponse(w http.ResponseWriter, r *http.Request, response common.ProxyResponse) {
+func sendProxyResponse(w http.ResponseWriter, r *http.Request, response common.ProxyResponse, statusCode int) {
 	hostname, _ := os.Hostname()
 	clientIP, clientPort, _ := net.SplitHostPort(r.RemoteAddr)
 	_, ipVersion := common.GetServerIPAndVersion(r)
@@ -429,6 +436,9 @@ func sendProxyResponse(w http.ResponseWriter, r *http.Request, response common.P
 	response.ClientIP = clientIP
 	response.ClientPort = clientPort
 	response.IPVersion = ipVersion
+
+	// 使用传入的 statusCode 设置 HTTP 状态码
+	w.WriteHeader(statusCode)
 
 	responseJSON, err := json.Marshal(response)
 	if err != nil {

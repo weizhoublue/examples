@@ -8,7 +8,7 @@ FROM golang:1.23 AS builder
 WORKDIR /app
 
 # 将当前目录的所有文件复制到工作目录中
-COPY . .
+COPY ./src .
 
 # 编译 Proxy 服务器
 RUN go build -o proxy_server proxy_server.go

@@ -58,6 +58,12 @@ func main() {
 		handleRequest(w, r, *port)
 	})
 
+	// 添加 /healthy 路由
+	http.HandleFunc("/healthy", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
 	// Start the HTTP server
 	address := fmt.Sprintf(":%s", *port)
 	fmt.Printf("Server is listening on port %s\n", *port)
@@ -79,6 +85,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request, serverPort string) {
 		return
 	}
 
+	envList := common.GetEnvironmentVariables("ENV_")
+
 	response := common.HttpServerResponse{
 		ServerHostName:     serverHostName,
 		ClientIP:           clientIP,
@@ -91,7 +99,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request, serverPort string) {
 		RequestTimestamp:   time.Now().Format(time.RFC3339),
 		URL:                r.URL.String(),
 		RequestCounter:     currentRequestCount,
-		ServerType:         "http", // Set server type to http
+		ServerType:         "http",  // Set server type to http
+		EnvList:            envList, // Add environment variables to the response
 	}
 
 	if err := sendResponse(w, response); err != nil {
