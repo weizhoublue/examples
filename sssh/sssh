@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# 定义集群信息
+clusters=(
+    "10.20.1.10 root lanwz '2U'"
+    "10.20.1.20 root lanwz '2U'"
+    "10.20.1.50 root lanwz '4U'"
+    "10.20.1.50 root lanwz '4U'"
+    # 添加更多集群信息
+)
+
+# 打印可用集群信息
+function print_clusters() {
+    echo "Available clusters:"
+    local index=1
+    for cluster in "${clusters[@]}"; do
+        IFS=' ' read -r ip user password description <<< "$cluster"
+        echo "[$index] $description (IP: $ip)"
+        index=$((index + 1))
+    done
+}
+
+# 检查参数
+if [ -z "$1" ]; then
+    echo "Usage: $0 <cluster_number>"
+    print_clusters
+    exit 1
+fi
+
+# 获取集群信息
+info=""
+index=1
+for cluster in "${clusters[@]}"; do
+    if [ "$index" -eq "$1" ]; then
+        info="$cluster"
+        break
+    fi
+    index=$((index + 1))
+done
+
+if [ -z "$info" ]; then
+    echo "Cluster number $1 not found."
+    print_clusters
+    exit 1
+fi
+
+# 解析集群信息
+IFS=' ' read -r ip user password description <<< "$info"
+
+# 使用 sshpass 自动化 SSH 登录
+sshpass -p "$password" ssh $user@$ip
