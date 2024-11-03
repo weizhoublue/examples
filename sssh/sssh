@@ -5,7 +5,7 @@ clusters=(
     "10.20.1.10 root daocloud123 '2U'"
     "10.20.1.20 root lanwz '2U'"
     "10.20.1.50 root lanwz '4U'"
-    "10.20.1.50 root lanwz '4U'"
+    "10.20.1.60 root lanwz '4U'"
     # 添加更多集群信息
 )
 
