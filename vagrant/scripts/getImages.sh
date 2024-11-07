@@ -15,7 +15,7 @@ ALIYUN_URL=registry.cn-hangzhou.aliyuncs.com/google_containers
 ORIGIN_IMAGES=$(kubeadm config images list  --kubernetes-version ${K8S_VERSION} 2>/dev/null)
 EXISTED_IMAGES=$(podman images --format "{{.Repository}}:{{.Tag}}" | sed -E 's/[[:space:]]+/:/')
 
-TIMEOUT_SEC=120
+TIMEOUT_SEC=180
 
 echo "---------- origin images: ----------"
 echo  "${ORIGIN_IMAGES} "
